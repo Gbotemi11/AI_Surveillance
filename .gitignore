@@ -1,0 +1,18 @@
+# Ignore Python compiled files
+__pycache__/
+*.pyc
+
+# Ignore directories for saving detected images and handler crops
+detected_weapons/
+weapon_handlers/
+
+# Ignore Ultralytics runs directories (optional, but good practice)
+runs/
+
+# Ignore environment files (optional, if you use specific env files)
+# .env
+# venv/ # if you had a virtual environment named 'venv'
+
+# Ignore specific OS generated files
+.DS_Store # macOS
+Thumbs.db # Windows
