@@ -271,4 +271,4 @@ if __name__ == "__main__":
     # host="127.0.0.1" means it's only accessible from your local machine.
     # To make it accessible from other machines on your local network, you might need to change host="0.0.0.0" (be cautious).
     # reload=True is useful for development, automatically restarts server on code changes.
-    uvicorn.run("main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
