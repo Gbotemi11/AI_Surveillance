@@ -7,10 +7,12 @@ import os
 import cv2
 import numpy as np
 from typing import List, Dict
+import json # Make sure json is imported for broadcast_message
 
 # Import YOLO from ultralytics
 # Ensure you have ultralytics installed: pip install ultralytics
 from ultralytics import YOLO
+import torch # <-- ADDED FOR MODEL LOADING FIX
 
 app = FastAPI(
     title="YOLOv8 Object Detection API",
@@ -52,10 +54,21 @@ async def load_model():
         print(f"Server: MODEL_PATH_ENV not set. Attempting to load model from default local path: {model_path}")
 
     try:
+        # --- ADDED LINES TO HANDLE THE SAFE GLOBAL LOADING ---
+        # Temporarily allowlist the DetectionModel class for safe loading
+        # This is the recommended fix by the PyTorch error message.
+        # This assumes Ultralytics' DetectionModel is in ultralytics.nn.tasks
+        # If your Ultralytics version is different, the module path might change.
+        torch.serialization.add_safe_global("ultralytics.nn.tasks", "DetectionModel")
+        # --- END ADDED LINES ---
+
         model = YOLO(model_path)
         print(f"Server: Model loaded successfully from {model_path}. Ready for predictions!")
     except Exception as e:
         print(f"Server: Error loading model from {model_path}: {e}")
+        # Log the full traceback for more details if needed during debugging
+        import traceback
+        traceback.print_exc()
         model = None # Ensure model is None if loading fails
 
 # --- Root Endpoint ---
@@ -64,7 +77,7 @@ async def read_root():
     if model:
         status_message = "YOLOv8 Object Detection API is running. Send POST requests with image files to `/detect_object/` to detect objects. WebSocket alerts available at `/ws`. Send alerts from Pi to `/detection_alert/`."
     else:
-        status_message = "YOLOv8 Object Detection API is running, but the model failed to load. Check server logs."
+        status_message = "YOLOv8 Object Detection API is running, but the model failed to load. Check server logs for details."
     return JSONResponse(content={"message": status_message})
 
 # --- Object Detection Endpoint ---
