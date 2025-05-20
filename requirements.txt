@@ -1,6 +1,8 @@
-fastapi
-uvicorn
-python-multipart
-ultralytics
-opencv-python
-gunicorn
+fastapi==0.110.0
+uvicorn[standard]==0.27.1
+ultralytics==8.1.33
+Pillow==10.2.0
+opencv-python==4.9.0.80
+numpy==1.26.4
+python-dotenv==1.0.1
+websockets 
