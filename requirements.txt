@@ -5,5 +5,6 @@ Pillow==10.2.0
 opencv-python==4.9.0.80
 numpy==1.26.4
 python-dotenv==1.0.1
-websockets 
+websockets
 gunicorn
+python-multipart 
