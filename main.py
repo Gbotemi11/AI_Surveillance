@@ -11,7 +11,7 @@ import json
 
 # Import YOLO from ultralytics
 from ultralytics import YOLO
-import torch # Imported for model loading fix
+import torch # Imported for model loading
 
 app = FastAPI(
     title="YOLOv8 Object Detection API",
@@ -48,11 +48,9 @@ async def load_model():
         print(f"Server: MODEL_PATH_ENV not set. Attempting to load model from default local path: {model_path}")
 
     try:
-        # --- CORRECTED LINES FOR SAFE GLOBAL LOADING ---
-        # Use 'add_safe_globals' (plural) and pass a dictionary as suggested by PyTorch
-        # The key is the module path, and the value is a list of class names within that module
-        torch.serialization.add_safe_globals({'ultralytics.nn.tasks': ['DetectionModel']})
-        # --- END CORRECTED LINES ---
+        # --- IMPORTANT: The torch.serialization.add_safe_globals line has been REMOVED ---
+        # We are trying a different approach to resolve the model loading error
+        # by ensuring PyTorch version compatibility via requirements.txt.
 
         model = YOLO(model_path)
         print(f"Server: Model loaded successfully from {model_path}. Ready for predictions!")

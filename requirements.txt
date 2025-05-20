@@ -8,4 +8,4 @@ python-dotenv==1.0.1
 websockets
 gunicorn
 python-multipart
-torch
+torch==2.2.0 # <--- CHANGE THIS LINE
