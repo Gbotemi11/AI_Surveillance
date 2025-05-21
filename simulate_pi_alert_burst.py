@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 import random
 import uuid # For generating unique IDs for dummy image URLs
+import os # For checking if the script exists
 
 # --- IMPORTANT: Configure your Render service URL here ---
 BASE_URL = "https://zero07-yolo-weapon-api.onrender.com/detection_alert/" 
@@ -24,8 +25,9 @@ def simulate_burst_capture_and_upload(num_images=5):
         
         # --- REPLACE THIS WITH ACTUAL CLOUD UPLOAD LOGIC ---
         # e.g., upload_to_s3(frame_data, f"alert_image_{uuid.uuid4()}.jpg")
-        # For simulation, we generate dummy URLs
-        dummy_url = f"https://picsum.photos/400/300?random={uuid.uuid4()}" # Using a random image service
+        # For simulation, we generate dummy URLs from Picsum.photos
+        # Using a random ID to get different images each time
+        dummy_url = f"https://picsum.photos/400/300?random={uuid.uuid4()}" 
         image_urls.append(dummy_url)
         # Simulate a small delay between captures (even if not microsecond-precise)
         time.sleep(0.05) # 50 milliseconds delay

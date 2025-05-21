@@ -18,7 +18,7 @@
         }
         .container { 
             width: 100%;
-            max-width: 900px; 
+            max-width: 1200px; /* Increased max-width for live feed */
             background: white; 
             padding: 30px; 
             border-radius: 12px; 
@@ -42,9 +42,41 @@
             background-color: #e0e0e0;
             color: #333;
         }
-        .alert-section {
-            border-top: 1px solid #eee;
-            padding-top: 20px;
+        .dashboard-content {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap; /* Allow wrapping on smaller screens */
+        }
+        .live-feed-section {
+            flex: 2; /* Takes more space */
+            min-width: 400px; /* Minimum width for live feed */
+            background-color: #2c3e50; /* Dark background for video */
+            border-radius: 8px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column; /* Stack h2 and img */
+            justify-content: center;
+            align-items: center;
+            padding: 10px;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.3);
+        }
+        .live-feed-section h2 {
+            color: #ecf0f1; /* Light text for dark background */
+        }
+        #liveFeed {
+            width: 100%;
+            height: auto;
+            display: block; /* Remove extra space below image */
+            border-radius: 4px;
+        }
+        .alert-list-section {
+            flex: 1; /* Takes less space */
+            min-width: 300px; /* Minimum width for alerts */
+            background-color: #fdfdfd;
+            border-radius: 8px;
+            padding: 15px;
+            border: 1px solid #eee;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05); /* Lighter shadow for this section */
         }
         .alert-item { 
             border: 1px solid #e0e0e0; 
@@ -66,6 +98,7 @@
         .alert-item p {
             margin: 5px 0;
             line-height: 1.5;
+            word-wrap: break-word; /* Ensure text wraps */
         }
         .alert-item strong {
             color: #34495e;
@@ -81,7 +114,7 @@
             border-radius: 6px;
         }
         .alert-images img { 
-            max-width: 120px; 
+            max-width: 100px; /* Smaller thumbnails for alerts */
             height: auto; 
             border: 1px solid #bdc3c7; 
             border-radius: 4px;
@@ -94,17 +127,35 @@
             70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
             100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
         }
+
+        /* Responsive adjustments */
+        @media (max-width: 768px) {
+            .dashboard-content {
+                flex-direction: column; /* Stack sections vertically */
+            }
+            .live-feed-section, .alert-list-section {
+                min-width: unset; /* Remove min-width on smaller screens */
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>AI Surveillance Dashboard</h1>
-        <p id="status" class="status">Status: Connecting...</p>
+        <p id="status" class="status">Status: Connecting to alerts...</p>
 
-        <div class="alert-section">
-            <h2>Latest Alerts</h2>
-            <div id="alerts-list">
-                <p>Waiting for alerts.</p>
+        <div class="dashboard-content">
+            <div class="live-feed-section">
+                <h2>Live Camera Feed</h2>
+                <img id="liveFeed" src="https://via.placeholder.com/640x480?text=Waiting+for+Live+Feed" alt="Live Camera Feed">
+            </div>
+
+            <div class="alert-list-section">
+                <h2>Latest Alerts</h2>
+                <div id="alerts-list">
+                    <p>Waiting for alerts.</p>
+                </div>
             </div>
         </div>
     </div>
@@ -112,30 +163,37 @@
     <script>
         const statusElement = document.getElementById('status');
         const alertsList = document.getElementById('alerts-list');
+        const liveFeedImage = document.getElementById('liveFeed');
 
-        // --- IMPORTANT: Use wss:// for secure WebSocket connections ---
-        const websocketUrl = "wss://zero07-yolo-weapon-api.onrender.com/ws"; // Your Render WebSocket URL
-        let ws;
+        // --- IMPORTANT: Configure your Render service URL here ---
+        const RENDER_BASE_URL = "https://zero07-yolo-weapon-api.onrender.com";
 
-        function connectWebSocket() {
-            ws = new WebSocket(websocketUrl);
+        // WebSocket for text-based alerts
+        const websocketAlertUrl = `${RENDER_BASE_URL}/ws`; 
+        let wsAlerts;
 
-            ws.onopen = (event) => {
-                console.log("WebSocket connected!");
+        // WebSocket for live video feed
+        const websocketLiveFeedUrl = `${RENDER_BASE_URL}/live_feed_ws`;
+        let wsLiveFeed;
+
+        // --- Connect to Alert WebSocket ---
+        function connectAlertWebSocket() {
+            wsAlerts = new WebSocket(websocketAlertUrl);
+
+            wsAlerts.onopen = (event) => {
+                console.log("WebSocket (Alerts) connected!");
                 statusElement.textContent = "Status: Connected to alert system.";
-                statusElement.style.backgroundColor = "#d4edda"; // Greenish for connected
+                statusElement.style.backgroundColor = "#d4edda"; 
                 statusElement.style.color = "#155724";
             };
 
-            ws.onmessage = (event) => {
+            wsAlerts.onmessage = (event) => {
                 const alertData = JSON.parse(event.data);
                 console.log("Received alert:", alertData);
 
-                // Create new alert item
                 const alertItem = document.createElement('div');
                 alertItem.classList.add('alert-item');
 
-                // Add specific class for weapon alerts for styling
                 if (alertData.detection_type === "weapon") {
                     alertItem.classList.add('weapon-alert');
                 }
@@ -148,50 +206,84 @@
                     <p><strong>Coordinates:</strong> [${alertData.coordinates.map(c => c.toFixed(2)).join(', ')}]</p>
                 `;
 
-                // --- Logic to display burst images or a single image ---
                 if (alertData.alert_images && Array.isArray(alertData.alert_images) && alertData.alert_images.length > 0) {
                     alertContent += `<p><strong>Captured Images:</strong></p>`;
                     alertContent += `<div class="alert-images">`;
                     alertData.alert_images.forEach(imageUrl => {
-                        // Add an error handler for images that fail to load
                         alertContent += `<img src="${imageUrl}" alt="${alertData.detection_type} capture" loading="lazy" onerror="this.onerror=null;this.src='https://via.placeholder.com/100x100?text=Image+Error';">`;
                     });
                     alertContent += `</div>`;
-                } else if (alertData.image_url) { // Fallback to single image_url if alert_images not present
+                } else if (alertData.image_url) { 
                     alertContent += `<p><strong>Image:</strong></p>`;
                     alertContent += `<div class="alert-images">
                                         <img src="${alertData.image_url}" alt="${alertData.detection_type} capture" loading="lazy" onerror="this.onerror=null;this.src='https://via.placeholder.com/100x100?text=Image+Error';">
                                     </div>`;
                 }
-                // --- END Logic to display images ---
 
                 alertItem.innerHTML = alertContent;
 
-                // Add the new alert to the top of the list
                 if (alertsList.firstChild && alertsList.firstChild.tagName === 'P' && alertsList.firstChild.textContent === 'Waiting for alerts.') {
-                    alertsList.removeChild(alertsList.firstChild); // Remove "Waiting for alerts."
+                    alertsList.removeChild(alertsList.firstChild);
                 }
                 alertsList.prepend(alertItem);
             };
 
-            ws.onclose = (event) => {
-                console.log("WebSocket disconnected. Attempting to reconnect...", event);
-                statusElement.textContent = "Status: Disconnected. Reconnecting...";
-                statusElement.style.backgroundColor = "#f8d7da"; // Reddish for disconnected
+            wsAlerts.onclose = (event) => {
+                console.log("WebSocket (Alerts) disconnected. Attempting to reconnect...", event);
+                statusElement.textContent = "Status: Alerts Disconnected. Reconnecting...";
+                statusElement.style.backgroundColor = "#f8d7da"; 
                 statusElement.style.color = "#721c24";
-                setTimeout(connectWebSocket, 3000); // Try to reconnect after 3 seconds
+                setTimeout(connectAlertWebSocket, 3000);
             };
 
-            ws.onerror = (error) => {
-                console.error("WebSocket error:", error);
-                statusElement.textContent = "Status: Error. Check console.";
+            wsAlerts.onerror = (error) => {
+                console.error("WebSocket (Alerts) error:", error);
+                statusElement.textContent = "Status: Alerts Error. Check console.";
                 statusElement.style.backgroundColor = "#f8d7da";
                 statusElement.style.color = "#721c24";
             };
         }
 
-        // Initiate the WebSocket connection when the page loads
-        window.onload = connectWebSocket;
+        // --- Connect to Live Feed WebSocket ---
+        function connectLiveFeedWebSocket() {
+            wsLiveFeed = new WebSocket(websocketLiveFeedUrl);
+
+            wsLiveFeed.onopen = (event) => {
+                console.log("WebSocket (Live Feed) connected!");
+                liveFeedImage.src = "https://via.placeholder.com/640x480?text=Receiving+Live+Feed...";
+            };
+
+            wsLiveFeed.onmessage = (event) => {
+                // Assuming the message is a Blob containing image data
+                const blob = event.data;
+                const imageUrl = URL.createObjectURL(blob);
+                liveFeedImage.src = imageUrl;
+
+                // Clean up the old Blob URL to prevent memory leaks
+                // This is important for high-frame rate streams
+                if (liveFeedImage.dataset.oldUrl) {
+                    URL.revokeObjectURL(liveFeedImage.dataset.oldUrl);
+                }
+                liveFeedImage.dataset.oldUrl = imageUrl;
+            };
+
+            wsLiveFeed.onclose = (event) => {
+                console.log("WebSocket (Live Feed) disconnected. Attempting to reconnect...", event);
+                liveFeedImage.src = "https://via.placeholder.com/640x480?text=Live+Feed+Disconnected";
+                setTimeout(connectLiveFeedWebSocket, 3000);
+            };
+
+            wsLiveFeed.onerror = (error) => {
+                console.error("WebSocket (Live Feed) error:", error);
+                liveFeedImage.src = "https://via.placeholder.com/640x480?text=Live+Feed+Error";
+            };
+        }
+
+        // Initiate both WebSocket connections when the page loads
+        window.onload = () => {
+            connectAlertWebSocket();
+            connectLiveFeedWebSocket();
+        };
     </script>
 </body>
 </html>

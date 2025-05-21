@@ -72,7 +72,7 @@ async def read_root():
         status_message = "YOLOv8 Object Detection API is running, but the model failed to load. Check server logs for details."
     return JSONResponse(content={"message": status_message})
 
-# --- Object Detection Endpoint (Existing, unchanged) ---
+# --- Object Detection Endpoint (Existing, unchanged, not directly used by current simulators) ---
 @app.post("/detect_object/")
 async def detect_object(file: UploadFile = File(...)):
     if model is None:
@@ -106,7 +106,7 @@ async def detect_object(file: UploadFile = File(...)):
     return JSONResponse(content={"filename": file.filename, "detections": detections})
 
 
-# --- WebSocket for Alerts (Existing, unchanged, as it broadcasts alert_images too) ---
+# --- WebSocket for Alerts ---
 active_alert_connections: List[WebSocket] = []
 
 @app.websocket("/ws") # This is for text-based alerts
@@ -147,14 +147,13 @@ async def live_feed_websocket_endpoint(websocket: WebSocket):
     live_feed_connections.append(websocket)
     print(f"WebSocket (Live Feed) client connected: {websocket.client}")
     try:
-        # Immediately send the latest frame if available
+        # Immediately send the latest frame if available to new connections
         if latest_annotated_frame_bytes:
             await websocket.send_bytes(latest_annotated_frame_bytes)
 
         # Keep the connection open indefinitely
         while True:
-            # This WebSocket is primarily for receiving frames to process
-            # and sending annotated frames back to connected dashboards.
+            # This WebSocket is for sending annotated frames.
             # We don't expect it to receive much from the dashboard,
             # but keep it alive.
             await asyncio.sleep(10) # Keep alive
@@ -183,6 +182,7 @@ async def stream_frame(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="Could not decode image.")
 
     # Perform YOLO detection
+    # Ensure 'person' and 'weapon' are correctly mapped from model.names
     results = model(frame, verbose=False) # verbose=False to suppress print statements
 
     # Draw bounding boxes and labels
@@ -197,22 +197,21 @@ async def stream_frame(file: UploadFile = File(...)):
             class_id = int(classes[i])
             class_name = model.names[class_id]
 
-            color = (0, 255, 0) # Green for general objects/persons
+            color = (0, 255, 0) # Default Green for general objects/persons
             if class_name == "weapon": # Assuming your model detects 'weapon' class
                 color = (0, 0, 255) # Red for weapons
-                # Optionally, send a specific alert if weapon is detected in live feed
-                # You might want to debounce this or only send on new detections
-                # await broadcast_alert_message({
-                #     "timestamp": datetime.now().isoformat(),
-                #     "location": "Live Camera Feed",
-                #     "detection_type": "weapon_in_feed",
-                #     "confidence": score,
-                #     "coordinates": boxes[i].tolist()
-                # })
+            elif class_name == "person": # Explicitly green for person if needed
+                 color = (0, 255, 0) # Green for person
 
             cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)
             label = f"{class_name}: {score:.2f}"
-            cv2.putText(frame, label, (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
+            # Ensure text fits within frame, adjust position if necessary
+            text_x = x1
+            text_y = y1 - 10
+            if text_y < 10: # If text goes above frame
+                text_y = y1 + 20
+            
+            cv2.putText(frame, label, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
     # Encode the annotated frame back to JPEG bytes
     ret, buffer = cv2.imencode('.jpg', frame)
