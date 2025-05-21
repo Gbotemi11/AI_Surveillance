@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Surveillance Dashboard</title>
+    <style>
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            margin: 0; 
+            background-color: #f0f2f5; 
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .container { 
+            width: 100%;
+            max-width: 900px; 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1); 
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        h1, h2 { 
+            color: #2c3e50; 
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+        }
+        .status { 
+            margin-bottom: 20px; 
+            padding: 12px; 
+            border-radius: 8px; 
+            font-weight: bold;
+            text-align: center;
+            background-color: #e0e0e0;
+            color: #333;
+        }
+        .alert-section {
+            border-top: 1px solid #eee;
+            padding-top: 20px;
+        }
+        .alert-item { 
+            border: 1px solid #e0e0e0; 
+            padding: 15px; 
+            margin-bottom: 15px; 
+            border-radius: 8px; 
+            background-color: #fdfdfd; 
+            transition: all 0.3s ease;
+        }
+        .alert-item:hover {
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+        .alert-item.weapon-alert { 
+            border-color: #e74c3c; /* Red border */
+            background-color: #fce4e4; /* Light red background */
+            color: #c0392b; /* Darker red text */
+            animation: pulse-red 1.5s infinite; /* Optional: Add a pulse animation */
+        }
+        .alert-item p {
+            margin: 5px 0;
+            line-height: 1.5;
+        }
+        .alert-item strong {
+            color: #34495e;
+        }
+        .alert-images { 
+            display: flex; 
+            flex-wrap: wrap; 
+            gap: 10px; 
+            margin-top: 15px;
+            justify-content: center;
+            background-color: #ecf0f1;
+            padding: 10px;
+            border-radius: 6px;
+        }
+        .alert-images img { 
+            max-width: 120px; 
+            height: auto; 
+            border: 1px solid #bdc3c7; 
+            border-radius: 4px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        /* Keyframes for optional pulse animation */
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0.4); }
+            70% { box-shadow: 0 0 0 10px rgba(231, 76, 60, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(231, 76, 60, 0); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>AI Surveillance Dashboard</h1>
+        <p id="status" class="status">Status: Connecting...</p>
+
+        <div class="alert-section">
+            <h2>Latest Alerts</h2>
+            <div id="alerts-list">
+                <p>Waiting for alerts.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const statusElement = document.getElementById('status');
+        const alertsList = document.getElementById('alerts-list');
+
+        // --- IMPORTANT: Use wss:// for secure WebSocket connections ---
+        const websocketUrl = "wss://zero07-yolo-weapon-api.onrender.com/ws"; // Your Render WebSocket URL
+        let ws;
+
+        function connectWebSocket() {
+            ws = new WebSocket(websocketUrl);
+
+            ws.onopen = (event) => {
+                console.log("WebSocket connected!");
+                statusElement.textContent = "Status: Connected to alert system.";
+                statusElement.style.backgroundColor = "#d4edda"; // Greenish for connected
+                statusElement.style.color = "#155724";
+            };
+
+            ws.onmessage = (event) => {
+                const alertData = JSON.parse(event.data);
+                console.log("Received alert:", alertData);
+
+                // Create new alert item
+                const alertItem = document.createElement('div');
+                alertItem.classList.add('alert-item');
+
+                // Add specific class for weapon alerts for styling
+                if (alertData.detection_type === "weapon") {
+                    alertItem.classList.add('weapon-alert');
+                }
+
+                let alertContent = `
+                    <p><strong>Timestamp:</strong> ${new Date(alertData.timestamp).toLocaleString()}</p>
+                    <p><strong>Location:</strong> ${alertData.location}</p>
+                    <p><strong>Detection Type:</strong> ${alertData.detection_type}</p>
+                    <p><strong>Confidence:</strong> ${(alertData.confidence * 100).toFixed(2)}%</p>
+                    <p><strong>Coordinates:</strong> [${alertData.coordinates.map(c => c.toFixed(2)).join(', ')}]</p>
+                `;
+
+                // --- Logic to display burst images or a single image ---
+                if (alertData.alert_images && Array.isArray(alertData.alert_images) && alertData.alert_images.length > 0) {
+                    alertContent += `<p><strong>Captured Images:</strong></p>`;
+                    alertContent += `<div class="alert-images">`;
+                    alertData.alert_images.forEach(imageUrl => {
+                        // Add an error handler for images that fail to load
+                        alertContent += `<img src="${imageUrl}" alt="${alertData.detection_type} capture" loading="lazy" onerror="this.onerror=null;this.src='https://via.placeholder.com/100x100?text=Image+Error';">`;
+                    });
+                    alertContent += `</div>`;
+                } else if (alertData.image_url) { // Fallback to single image_url if alert_images not present
+                    alertContent += `<p><strong>Image:</strong></p>`;
+                    alertContent += `<div class="alert-images">
+                                        <img src="${alertData.image_url}" alt="${alertData.detection_type} capture" loading="lazy" onerror="this.onerror=null;this.src='https://via.placeholder.com/100x100?text=Image+Error';">
+                                    </div>`;
+                }
+                // --- END Logic to display images ---
+
+                alertItem.innerHTML = alertContent;
+
+                // Add the new alert to the top of the list
+                if (alertsList.firstChild && alertsList.firstChild.tagName === 'P' && alertsList.firstChild.textContent === 'Waiting for alerts.') {
+                    alertsList.removeChild(alertsList.firstChild); // Remove "Waiting for alerts."
+                }
+                alertsList.prepend(alertItem);
+            };
+
+            ws.onclose = (event) => {
+                console.log("WebSocket disconnected. Attempting to reconnect...", event);
+                statusElement.textContent = "Status: Disconnected. Reconnecting...";
+                statusElement.style.backgroundColor = "#f8d7da"; // Reddish for disconnected
+                statusElement.style.color = "#721c24";
+                setTimeout(connectWebSocket, 3000); // Try to reconnect after 3 seconds
+            };
+
+            ws.onerror = (error) => {
+                console.error("WebSocket error:", error);
+                statusElement.textContent = "Status: Error. Check console.";
+                statusElement.style.backgroundColor = "#f8d7da";
+                statusElement.style.color = "#721c24";
+            };
+        }
+
+        // Initiate the WebSocket connection when the page loads
+        window.onload = connectWebSocket;
+    </script>
+</body>
+</html>

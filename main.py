@@ -48,10 +48,6 @@ async def load_model():
         print(f"Server: MODEL_PATH_ENV not set. Attempting to load model from default local path: {model_path}")
 
     try:
-        # --- IMPORTANT: The torch.serialization.add_safe_globals line has been REMOVED ---
-        # We are trying a different approach to resolve the model loading error
-        # by ensuring PyTorch version compatibility via requirements.txt.
-
         model = YOLO(model_path)
         print(f"Server: Model loaded successfully from {model_path}. Ready for predictions!")
     except Exception as e:
@@ -132,6 +128,8 @@ async def broadcast_message(message: Dict):
 
 @app.post("/detection_alert/")
 async def receive_detection_alert(detection_data: Dict):
+    # This endpoint now expects 'alert_images' which is a list of URLs
+    # It will simply pass this through to the WebSocket clients
     print(f"Received detection alert from Pi: {detection_data}")
     await broadcast_message(detection_data)
     return {"status": "alert received and broadcasted"}
