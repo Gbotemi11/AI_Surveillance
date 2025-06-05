@@ -9,6 +9,7 @@ import numpy as np
 from typing import List, Dict
 import json
 import asyncio
+import datetime # Added for timestamp generation
 
 # Import YOLO from ultralytics
 from ultralytics import YOLO
@@ -185,6 +186,11 @@ async def stream_frame(file: UploadFile = File(...)):
     # Ensure 'person' and 'weapon' are correctly mapped from model.names
     results = model(frame, verbose=False) # verbose=False to suppress print statements
 
+    # Prepare for drawing annotations and collecting alert data
+    alert_detected = False
+    weapon_confidence = 0.0
+    detection_coordinates = [] # Stores [x1, y1, x2, y2] of the first detected weapon
+
     # Draw bounding boxes and labels
     for r in results:
         boxes = r.boxes.xyxy.cpu().numpy()
@@ -200,6 +206,16 @@ async def stream_frame(file: UploadFile = File(...)):
             color = (0, 255, 0) # Default Green for general objects/persons
             if class_name == "weapon": # Assuming your model detects 'weapon' class
                 color = (0, 0, 255) # Red for weapons
+                
+                # --- ALERT GENERATION LOGIC ---
+                # Only trigger alert if confidence is above a threshold and we haven't alerted for this frame yet
+                # You can adjust this threshold as needed
+                if score > 0.5: # Example threshold
+                    alert_detected = True 
+                    weapon_confidence = score
+                    detection_coordinates = [x1, y1, x2, y2]
+                    # No need to break here, continue drawing all detections, but only send ONE alert per frame
+                    
             elif class_name == "person": # Explicitly green for person if needed
                  color = (0, 255, 0) # Green for person
 
@@ -213,11 +229,32 @@ async def stream_frame(file: UploadFile = File(...)):
             
             cv2.putText(frame, label, (text_x, text_y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
-    # Encode the annotated frame back to JPEG bytes
-    ret, buffer = cv2.imencode('.jpg', frame)
-    if not ret:
-        raise HTTPException(status_code=500, detail="Could not encode annotated image.")
-    annotated_frame_bytes = buffer.tobytes()
+    # --- BROADCAST ALERT IF A WEAPON WAS DETECTED ---
+    if alert_detected:
+        # Encode the detected frame for the alert message
+        # Use a higher quality for the alert image if desired
+        ret_alert, buffer_alert = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 80])
+        alert_image_base64 = None
+        if ret_alert:
+            alert_image_base64 = base64.b64encode(buffer_alert.tobytes()).decode('utf-8')
+
+        alert_data = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "location": "Live Camera Feed Source", # Can be customized
+            "detection_type": "weapon",
+            "confidence": weapon_confidence,
+            "coordinates": detection_coordinates,
+            # Pass the image as a base64 data URI to the dashboard
+            "image_url": f"data:image/jpeg;base64,{alert_image_base64}" if alert_image_base64 else None
+        }
+        await broadcast_alert_message(alert_data)
+        print("ALERT: Weapon detected and alert broadcasted from live feed!") # For server logs
+
+    # Encode the annotated frame back to JPEG bytes for the live feed display
+    ret_live, buffer_live = cv2.imencode('.jpg', frame, [cv2.IMWRITE_JPEG_QUALITY, 70]) # Use a different quality if desired
+    if not ret_live:
+        raise HTTPException(status_code=500, detail="Could not encode annotated image for live feed.")
+    annotated_frame_bytes = buffer_live.tobytes()
 
     # Store the latest frame
     latest_annotated_frame_bytes = annotated_frame_bytes
